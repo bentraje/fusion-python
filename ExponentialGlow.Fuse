@@ -1,0 +1,183 @@
+--[[--
+Based in part on FuseBlur by Isaac Guenard. This Fuse performs an iterative exponential glow. 
+--]]--
+
+FuRegisterClass("ExponentialGlow", CT_Tool, {
+	REGS_Name = "ExponentialGlow",
+	REGS_Category = "Blur",
+	REGS_OpIconSTring = "XGlo",
+	REGS_OpDescription = "Exponential Glow.",
+	REGS_Company = "Muse VFX",
+	REGS_URL = "http://www.musevfx.com",
+})
+
+function Create()
+
+	InR = self:AddInput("Red", "Red", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Integer = true,
+		INP_Default = 1.0,
+		ICD_Width = 0.25,
+		})		
+
+	InG = self:AddInput("Green", "Green", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Integer = true,
+		INP_Default = 1.0,
+		ICD_Width = 0.25,
+		})		
+
+	InB = self:AddInput("Blue", "Blue", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Integer = true,
+		INP_Default = 1.0,
+		ICD_Width = 0.25,
+		})		
+
+	InA = self:AddInput("Alpha", "Alpha", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Integer = true,
+		INP_Default = 1.0,
+		ICD_Width = 0.25,
+		})		
+		
+	InLockXY = self:AddInput("Lock X/Y", "LockXY", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Integer = true,
+		INP_Default = 1.0,
+		INP_DoNotifyChanged = true, -- We want to hear about changes on this control
+		})
+		
+	InBlurX = self:AddInput("X Blur Size", "XBlurSize", {
+		LINKS_Name = "Blur Size",
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 10.0,
+		INP_Default = 1.0,
+		})		
+
+	InBlurY = self:AddInput("Y Blur Size", "YBlurSize", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 10.0,
+		INP_Default = 1.0,
+		IC_Visible = false,
+		})		
+	
+	InPasses = self:AddInput("Num Passes", "NumPasses", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 16.0,
+		INP_Default = 4.0,
+		INP_MaxAllowed = 64.0,
+		INP_Integer = true,
+		IC_Visible = false,
+		})
+
+	InIterations = self:AddInput("Iterations", "Iterations", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 16,
+		INP_Default = 4,
+		INP_Integer = true,
+	})
+		
+	InBlend = self:AddInput("Blend", "Blend", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 1.0,
+		INP_MaxAllowed = 1.0,
+		INP_Default = 1.0,
+		})			
+
+	InImage = self:AddInput("Input", "Input", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})
+
+	OutImage = self:AddOutput("Output", "Output", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})				
+end
+ 
+function Process(req) 
+	local img = InImage:GetValue(req)
+	local blur_x = InBlurX:GetValue(req).Value / 720
+	local locked = (InLockXY:GetValue(req).Value > 0.5)
+	local iterations = InIterations:GetValue(req).Value
+	
+	if locked == true then 
+		blur_y = blur_x
+	else
+		blur_y = InBlurY:GetValue(req).Value / 720
+	end
+	
+	local do_r = InR:GetValue(req).Value
+	local do_g = InG:GetValue(req).Value
+	local do_b = InB:GetValue(req).Value
+	local do_a = InA:GetValue(req).Value
+	local passes = math.floor( InPasses:GetValue(req).Value + 0.5 ) -- make darn sure this is an integer
+	local blend = InBlend:GetValue(req).Value
+	
+	local result = Image({IMG_Like = img})
+	local glowed = img:Copy()
+	
+	for i = 1, iterations do
+		
+		img:Blur(result, {
+			BLUR_Type = "Gaussian", 
+			BLUR_Red = do_r,
+			BLUR_Green = do_g,
+			BLUR_Blue = do_b,
+			BLUR_Alpha = do_a,
+			BLUR_XSize = blur_x*2^i, 
+			BLUR_YSize = blur_y*2^i,
+			BLUR_Normalize = 1.0,
+			BLUR_Passes = passes,
+			BLUR_Blend = 1,
+			})
+		
+		glowed:Merge(result, {
+			MO_ApplyMode = "Merge",
+			MO_ApplyOperator = "Over",
+			MO_XOffset = 0.5,
+			MO_YOffset = 0.5,
+			MO_XSize = 1.0,
+			MO_YSize = 1.0,
+			MO_Angle = 0.0,
+			MO_FgAddSub = 1,
+			MO_BgAddSub = 1,
+			MO_BurnIn = 0,
+			MO_FgAlphaGain = 0,
+			MO_Invert = 1,
+			MO_DoZ = false,
+			})
+	end
+		
+
+	
+	OutImage:Set(req, glowed)
+end
+
+function NotifyChanged(inp, param, time)
+	if inp == InLockXY then   -- Update our sliders
+		local locked = (param.Value > 0.5)
+		
+		if locked then
+			InBlurX:SetAttrs({ LINKS_Name = "Blur Size" })
+			InBlurY:SetAttrs({ IC_Visible = false })
+		else
+			InBlurX:SetAttrs({ LINKS_Name = "X Blur Size" })
+			InBlurY:SetAttrs({ IC_Visible = true })
+		end
+	elseif inp == InFilter then
+	
+		InPasses:SetAttrs({ IC_Visible = (param.Value == 3), })
+	end
+end

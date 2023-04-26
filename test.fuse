@@ -1,0 +1,5 @@
+FuRegisterClass(“CGain”, CT_Tool, {
+     REGS_Category = “Fuses”,
+     REGS_OpIconString = ‘fCG’,
+     REGS_OpDescription = “CGain Tool”,
+})

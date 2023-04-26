@@ -1,0 +1,156 @@
+--[[--
+
+Depth Transform Text (and Possibly Other Stuff)
+
+Hi, this fuse is made as part of my efforts to help people enjoy Davinci Resolve and create unique effects.
+Part of the philosophy is that people can contact me with suggestions and comments, either via the website
+or on the youtube channel. This helps the end users and helps create a better tool. To do this the source
+needs to be clear. Please avoid posting this code to forums, your website, etc and link to the source website 
+or the youtube channel. 
+
+Chris Ridings
+www.chrisridings.com
+
+Chris Ridings
+www.chrisridings.com
+
+--]]--
+
+FuRegisterClass("DepthTransform", CT_Tool, {
+	REGS_Category = "Fuses",
+	REGS_OpIconString = "fDT",
+	REGS_OpDescription = "Depth Transform Fuse",
+	})
+
+function Create()
+
+	SiteButton = self:AddInput("Visit www.chrisridings.com", "Label1", {
+		LINKID_DataType = "Text",
+		INPID_InputControl = "ButtonControl",
+		INP_DoNotifyChanged = true,
+		INP_External = false,
+	})	
+	YouTubeButton = self:AddInput("Visit the Youtube Channel", "Label2", {
+		LINKID_DataType = "Text",
+		INPID_InputControl = "ButtonControl",
+		INP_DoNotifyChanged = true,
+		INP_External = false,
+	})	
+	
+	InGain = self:AddInput("Search Size", "Gain", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_Default = 2.0,
+		})			
+
+	InImage = self:AddInput("Input", "Input", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})
+
+	OutImage = self:AddOutput("Output", "Output", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})				
+end
+
+function NotifyChanged(inp, param, time)
+	if (param ~= nil) then
+		if (param.Value == 1) then
+			if (inp == SiteButton) then
+				bmd.openurl("https://www.chrisridings.com")
+			end
+			if (inp == YouTubeButton) then
+				bmd.openurl("https://www.youtube.com/c/ChrisRidings")
+			end	
+		end
+	end
+end
+
+
+function Process(req) 
+	local img = InImage:GetValue(req)
+	local gain = InGain:GetValue(req).Value	
+	local out = Image({IMG_Like = img})
+	
+		self:DoMultiProcess(nil, { In = img, Out = out, Gain = gain }, img.Height, function (y)
+
+			if (Gain > 50) then Gain = 50 end
+
+			local p = Pixel()
+			-- Calculate the max radius based on Gain
+			local maxradius = math.sqrt(math.pow(Gain,2) + math.pow(Gain,2))
+
+			for x=0,In.Width-1 do
+				In:GetPixel(x,y, p)
+				if (p.A == 0) then
+					Out:SetPixel(x,y,p)
+				else
+					local minradius = 10000
+					local cr
+					local dp = Pixel()
+					local dp2 = Pixel()
+					local dp3 = Pixel()
+					local dp4 = Pixel()
+					local dp5 = Pixel()
+					local dp6 = Pixel()
+					local dp7 = Pixel()
+					local dp8 = Pixel()
+					local found = 0
+					for d = 1,Gain do
+						for p = 0, d do
+							if (x - p < 0 or x + p > In.Width - 1 or y - d < 0 or y + d > In.Height - 1) then
+								cr = math.sqrt(math.pow(p,2) + math.pow(d,2))
+								if (cr < minradius) then minradius = cr end
+								found = 1
+								break
+							end
+							In:GetPixel(x - p, y - d,dp)
+							In:GetPixel(x - p, y + d,dp3)
+							if (p ~= d) then
+								In:GetPixel(x - d, y - p,dp5)
+								In:GetPixel(x + d, y - p,dp7)
+							else
+								dp5.A = 1
+								dp7.A = 1
+							end
+							if (p > 0) then
+								In:GetPixel(x + p, y - d,dp2)
+								In:GetPixel(x + p, y + d,dp4)
+								if (p ~= d) then
+									In:GetPixel(x - d, y + p,dp6)
+									In:GetPixel(x + d, y + p,dp8)
+								else
+									dp6.A = 1
+									dp8.A = 1
+								end
+							else
+								dp2.A = 1
+								dp4.A = 1
+								dp6.A = 1
+								dp8.A = 1
+							end
+							if (dp.A == 0 or dp2.A == 0 or dp3.A == 0 or dp4.A == 0 or dp5.A == 0 or dp6.A == 0 or dp7.A == 0 or dp8.A == 0) then
+								cr = math.sqrt(math.pow(p,2) + math.pow(d,2))
+								if (cr < minradius) then minradius = cr end
+								found = 1
+								break
+							end	
+						end		
+						if (found == 1) then break end			
+					end
+					if (minradius < 10000) then
+						--minradius = minradius - 1.442135623731
+						p.R = minradius/maxradius
+						p.B = minradius/maxradius
+						p.G = minradius/maxradius
+						p.A = 1
+					end
+					Out:SetPixel(x,y,p)
+				end
+			end
+			end)
+
+	
+	OutImage:Set(req, out)
+end

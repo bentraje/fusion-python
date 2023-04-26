@@ -1,0 +1,24 @@
+Atom {
+	Name = "Exposure",
+	Category = "Tools/Color",
+	Minimum = 15,
+	Author = "David Kohen",
+	Version = 1,
+	Date = {2020, 3, 30},
+	Description = [[I believe this tool's name is pretty self-explanatory.
+
+<li>This fuse uses DCTL for GPU acceleration, so it only works in Fusion 16+ and Resolve 15+.</li>
+
+<p>A special thanks to Bryan Ray for teaching me how to write fuses :)</p>
+<li>I would also like to thanks Aleksander Westphal for sharing a DCTL example fuse with the community.</li>
+
+
+
+
+<p>Thank you</p>
+
+
+<br>Learn Now FX.</br>]],
+	Deploy = { "Fuses/Color/Exposure.fuse",
+	},
+}

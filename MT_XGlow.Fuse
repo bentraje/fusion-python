@@ -1,0 +1,391 @@
+--[[--
+Based in part on FuseBlur by Isaac Guenard. This Fuse performs an iterative exponential glow. 
+--]]--
+
+FuRegisterClass("XGlow", CT_Tool, {
+	REGS_Name = "XGlow",
+	REGS_Category = "Blur",
+	REGS_OpIconSTring = "XGlo",
+	REGS_OpDescription = "Exponential Glow.",
+	REGS_Company = "Muse VFX",
+	REGS_URL = "http://www.musevfx.com",
+})
+
+function Create()
+
+	InMode = self:AddInput("Mode", "Mode", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "MultiButtonControl",
+		{ MBTNC_AddButton = "Exponential", },
+		{ MBTNC_AddButton = "Fibonacci", },
+		MBTNC_StretchToFit = true,
+		INP_Default = 1,
+	})
+
+	-- InR = self:AddInput("Red", "Red", {
+		-- LINKID_DataType = "Number",
+		-- INPID_InputControl = "CheckboxControl",
+		-- INP_Integer = true,
+		-- INP_Default = 1.0,
+		-- ICD_Width = 0.25,
+		-- })		
+
+	-- InG = self:AddInput("Green", "Green", {
+		-- LINKID_DataType = "Number",
+		-- INPID_InputControl = "CheckboxControl",
+		-- INP_Integer = true,
+		-- INP_Default = 1.0,
+		-- ICD_Width = 0.25,
+		-- })		
+
+	-- InB = self:AddInput("Blue", "Blue", {
+		-- LINKID_DataType = "Number",
+		-- INPID_InputControl = "CheckboxControl",
+		-- INP_Integer = true,
+		-- INP_Default = 1.0,
+		-- ICD_Width = 0.25,
+		-- })		
+
+	-- InA = self:AddInput("Alpha", "Alpha", {
+		-- LINKID_DataType = "Number",
+		-- INPID_InputControl = "CheckboxControl",
+		-- INP_Integer = true,
+		-- INP_Default = 1.0,
+		-- ICD_Width = 0.25,
+		-- })		
+		
+	InLockXY = self:AddInput("Lock X/Y", "LockXY", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Integer = true,
+		INP_Default = 1.0,
+		INP_DoNotifyChanged = true, -- We want to hear about changes on this control
+		})
+	
+
+	InThresholdLow = self:AddInput("Threshold", "ThresholdLow", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "RangeControl",
+		IC_ControlGroup = 1,
+		IC_ControlID = 0,
+		--LINKS_Name = "Min",
+		--RNGCS_MidName = "Between",
+		INP_MinScale = -0,
+		INP_MaxScale = 1.0,
+		INP_Default = 0,
+	})
+	
+	InThresholdHigh = self:AddInput("", "ThresholdHigh", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "RangeControl",
+		IC_ControlGroup = 1,
+		IC_ControlID = 1,
+		--LINKS_Name = "Max",	
+		INP_MinScale = 0,
+		INP_MaxScale = 1.5,
+		INP_Default = 0.1,
+	})	
+	
+	InBlurX = self:AddInput("X Blur Size", "XBlurSize", {
+		LINKS_Name = "Blur Size",
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 10.0,
+		INP_Default = 1.0,
+		INP_MinAllowed = 0.001,
+		})		
+
+	InBlurY = self:AddInput("Y Blur Size", "YBlurSize", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 10.0,
+		INP_Default = 1.0,
+		IC_Visible = false,
+		})		
+	
+	InPasses = self:AddInput("Num Passes", "NumPasses", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 16.0,
+		INP_Default = 4.0,
+		INP_MaxAllowed = 64.0,
+		INP_Integer = true,
+		IC_Visible = false,
+		})
+
+	InIterations = self:AddInput("Iterations", "Iterations", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 16,
+		INP_Default = 12,
+		INP_Integer = true,
+		INP_MinAllowed = 1,
+		INP_MaxAllowed = 16,
+	})
+		
+	InFalloff =	self:AddInput("Falloff", "Falloff", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 3,
+		INP_MinScale = 0.5,
+		INP_Default = 1,
+		INP_Integer = false,
+		INP_MinAllowed = 0.01,
+		INP_MaxAllowed = 10,
+	})
+	
+	InGradient = self:AddInput("Gradient", "Gradient", {
+		LINKS_Name = "Gradient",
+		LINKID_DataType = "Gradient",
+		INPID_InputControl = "GradientControl",
+		INP_MinAllowed = -100000.0,
+		INP_MaxAllowed = 100000.0,
+		INP_MinScale = 0.0,
+		INP_MaxScale = 1.0,
+		--INP_Default = 0,
+	})	
+	
+	InInterpolation = self:AddInput("Gradient Interpolation Method", "GradientInterpolationMethod", {
+		LINKID_DataType      = "FuID",
+		INPID_InputControl   = "MultiButtonIDControl",
+		{ MBTNC_AddButton = "RGB", MBTNCID_AddID = "RGB", },
+		{ MBTNC_AddButton = "HLS", MBTNCID_AddID = "HLS", },
+		{ MBTNC_AddButton = "HSV", MBTNCID_AddID = "HSV", },
+		{ MBTNC_AddButton = "LAB", MBTNCID_AddID = "LAB", },
+		MBTNC_StretchToFit   = true,
+		INP_DoNotifyChanged  = true,
+		INPID_DefaultID      = "HLS",
+	})	
+
+	-- flag will be cleared after default gradient has been created in OnAddToFlow
+	InNewTool = self:AddInput("Gradient not changed yet", "NewTool", {
+		LINKID_DataType      = "Number",
+		INPID_InputControl   = "CheckboxControl",
+		IC_Visible           = false,
+		INP_External         = false,
+		INP_Passive          = true,
+		INP_Default          = 1.0,
+		INP_Priority         = 100,
+		})	
+
+	InBlend = self:AddInput("Blend", "Blend", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MaxScale = 1.0,
+		INP_MaxAllowed = 1.0,
+		INP_Default = 1.0,
+		})		
+
+	InGlowOnly = self:AddInput("Glow Only", "GlowOnly", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "CheckboxControl",
+		INP_Integer = true,
+		INP_Default = 0,
+	})
+
+	-- InGlowMask = self:AddInput("Glow Mask", "GlowMask", {
+		-- LINKID_DataType = "Image",
+		-- LINK_Main = 5,	
+		-- INP_Required = false,
+	-- })
+
+	InImage = self:AddInput("Input", "Input", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})
+
+	OutImage = self:AddOutput("Output", "Output", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})				
+end
+
+function OnAddToFlow()
+	local grad = Gradient()
+	if InNewTool:GetSource(0).Value >= 0.5 then
+		-- There is no default attribute for gradients. It's always black to white.
+		-- To have a different gradient for new tools, we'll set one up here but
+		-- only once. The "NewTool" flag is cleared immediately afterwards so we
+		-- don't overwrite gradients when the comp is reopened at a later time.
+		grad:AddColor(0.0, Pixel({R = 1.0, G = 1, B = 1, A = 1}))
+		grad:AddColor(1.0, Pixel({R = 1, G = 1, B = 1.0, A = 1}))
+		InGradient:SetSource(grad, 0, 0)
+		InNewTool:SetSource(Number(0.0), 0, 0)
+	end
+end
+ 
+function Process(req) 
+
+	local blur_x = InBlurX:GetValue(req).Value / 720
+	local locked = (InLockXY:GetValue(req).Value > 0.5)
+	local iterations = InIterations:GetValue(req).Value
+	local falloff = InFalloff:GetValue(req).Value
+	local glowOnly = InGlowOnly:GetValue(req).Value
+	
+	if locked == true then 
+		blur_y = blur_x
+	else
+		blur_y = InBlurY:GetValue(req).Value / 720
+	end
+	
+	-- local do_r = InR:GetValue(req).Value
+	-- local do_g = InG:GetValue(req).Value
+	-- local do_b = InB:GetValue(req).Value
+	-- local do_a = InA:GetValue(req).Value
+	local passes = math.floor( InPasses:GetValue(req).Value + 0.5 ) -- make darn sure this is an integer
+	local blend = InBlend:GetValue(req).Value
+	local mode = InMode:GetValue(req).Value
+	local threshold = InThresholdLow:GetValue(req).Value
+	local thresholdHigh = InThresholdHigh:GetValue(req).Value
+
+	local grad = InGradient:GetValue(req)
+	local gradspace   = InInterpolation:GetValue(req).Value
+		
+	local fib = {1, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765 }
+	local expo = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536 }
+
+	-- Set up images - Try to simplify this if possible, for memory efficiency.
+	local img = InImage:GetValue(req)				-- Input image, required. Merge against this at the end.
+	-- local glowmask = InGlowMask:GetValue(req)		-- Input Glow Mask
+	local result = Image({IMG_Like = img})			-- Output image
+	local src = img:Copy()							-- Preprocessed Glow Source
+	
+	if glowOnly == 1 then
+		glowed = Image({IMG_Like = img})
+		local p = Pixel({R=0,G=0,B=0,A=0})
+		glowed:Fill(p)
+	else
+		glowed = img:Copy()
+	end
+
+	--if threshold > 0 and thresholdHigh > 0 then
+		src = img:ChannelOpOf("Threshold", nil, {R = "bg.R", G = "bg.G", B = "bg.B", A = "bg.A"}, threshold, thresholdHigh)	
+	--end
+
+	
+	-- Preprocess glow source 
+	-- src:MultiProcessPixels(nil, {Threshold = threshold,}, 0,0, img.Width, img.Height, src, glowmask, function (x,y, p1, p2)
+		-- if p1.R < Threshold then p1.R = 0 else p1.R = p1.R * (1-p2.A)  end
+		-- if p1.G < Threshold then p1.G = 0 else p1.G = p1.G * (1-p2.A)  end
+		-- if p1.B < Threshold then p1.B = 0 else p1.B = p1.B * (1-p2.A)  end
+		-- return p1
+		-- end)
+		
+	-- Make some scaled versions for later iterations
+	
+	-- if iterations > 4 then -- Only do this if we need to.
+		-- local halfWidth = math.floor(img.Width * 0.5)
+		-- local halfHeight = math.floor(img.Height * 0.5)
+		-- halfSrc = Image({IMG_Like = src, IMG_Width = halfWidth, IMG_Height = halfHeight})
+		-- src:Resize(halfSrc, {RSZ_Filter = "BiLinear", RSZ_Width = halfWidth, RSZ_Height = halfHeight,})
+	-- end 
+	
+	-- if iterations > 8 then
+		-- local quarterWidth = math.floor(img.Width * 0.25)
+		-- local quarterHeight = math.floor(img.Height * 0.25)
+		-- quarterSrc = Image({IMG_Like = src, IMG_Width = quarterWidth, IMG_Height = quarterHeight})
+		-- src:Resize(quarterSrc, {RSZ_Filter = "BiLinear", RSZ_Width = quarterWidth, RSZ_Height = quarterHeight, })
+	-- end
+	
+	
+	-- Iterative glow
+	for i = 1, iterations do
+	
+		local var = i/iterations
+		
+		-- Get color from gradient
+		local p = grad:QuickEvaluate(var, gradspace)
+	
+		if mode == 1 then
+			multiplier = fib[i]
+		else
+			multiplier = expo[i]
+		end
+		
+--		if i <= 4 then
+			src:Blur(result, {
+				BLUR_Type = "Gaussian", 
+				-- BLUR_Red = do_r,
+				-- BLUR_Green = do_g,
+				-- BLUR_Blue = do_b,
+				-- BLUR_Alpha = do_a,
+				BLUR_XSize = blur_x*multiplier, 
+				BLUR_YSize = blur_y*multiplier,
+				BLUR_Normalize = 1.0,	--Can we use this in place of the Merge?
+				BLUR_Passes = passes,
+				BLUR_Blend = 1,
+				})
+		-- elseif i <= 8 then
+			-- halfSrc:Blur(result, {
+				-- BLUR_Type = "Gaussian", 
+				-- BLUR_Red = do_r,
+				-- BLUR_Green = do_g,
+				-- BLUR_Blue = do_b,
+				-- BLUR_Alpha = do_a,
+				-- BLUR_XSize = blur_x*multiplier, 
+				-- BLUR_YSize = blur_y*multiplier,
+				-- BLUR_Normalize = 1.0,	--Can we use this in place of the Merge?
+				-- BLUR_Passes = passes,
+				-- BLUR_Blend = 1,
+				-- })
+			-- result:Resize(result, {RSZ_Filter = "BiLinear", RSZ_Width = img.Width, RSZ_Height = img.Height,})
+		-- else
+			-- quarterSrc:Blur(result, {
+				-- BLUR_Type = "Gaussian", 
+				-- BLUR_Red = do_r,
+				-- BLUR_Green = do_g,
+				-- BLUR_Blue = do_b,
+				-- BLUR_Alpha = do_a,
+				-- BLUR_XSize = blur_x*multiplier, 
+				-- BLUR_YSize = blur_y*multiplier,
+				-- BLUR_Normalize = 1.0,	--Can we use this in place of the Merge?
+				-- BLUR_Passes = passes,
+				-- BLUR_Blend = 1,
+				-- })
+			-- result:Resize(result, {RSZ_Filter = "BiLinear", RSZ_Width = img.Width, RSZ_Height = img.Height, })		
+		-- end
+		
+		
+		local m = ColorMatrixFull()
+		m:Scale(1/(falloff^i), 1/(falloff^i), 1/(falloff^i), 1)
+		m:Scale(p.R, p.G, p.B, 1)
+		result = result:ApplyMatrixOf(m, {})
+		
+		glowed:Merge(result, {
+			MO_ApplyMode = "Merge",
+			MO_ApplyOperator = "Over",
+			MO_XOffset = 0.5,
+			MO_YOffset = 0.5,
+			MO_XSize = 1.0,
+			MO_YSize = 1.0,
+			MO_Angle = 0.0,
+			MO_FgAddSub = 1,
+			MO_BgAddSub = 1,
+			MO_BurnIn = 0,
+			MO_FgAlphaGain = 0,
+			MO_Invert = 1,
+			MO_DoZ = false,
+			})
+	end
+		
+
+	
+	OutImage:Set(req, glowed)
+end
+
+function NotifyChanged(inp, param, time)
+	if inp == InLockXY then   -- Update our sliders
+		local locked = (param.Value > 0.5)
+		
+		if locked then
+			InBlurX:SetAttrs({ LINKS_Name = "Blur Size" })
+			InBlurY:SetAttrs({ IC_Visible = false })
+		else
+			InBlurX:SetAttrs({ LINKS_Name = "X Blur Size" })
+			InBlurY:SetAttrs({ IC_Visible = true })
+		end
+	elseif inp == InFilter then
+	
+		InPasses:SetAttrs({ IC_Visible = (param.Value == 3), })
+	end
+end

@@ -1,0 +1,73 @@
+FuRegisterClass("Exposure", CT_Tool, {
+    REGS_Category = "Fuses\\Color",
+    REGS_OpIconString = "EXP",
+    REGS_OpDescription = "Exposure",
+    REG_Version = 1.0,
+    REGS_Company = "Learn Now FX",
+    REGS_URL = "http://www.youtube.com/LearnNowFX",
+})
+
+ExposureParams = [[
+	float exposure;
+	int srcCompOrder;
+]]
+
+ExposureKernel = [[
+	__KERNEL__ void ExposureKernel(__CONSTANTREF__ ExposureParams *params, __TEXTURE2D__ src, __TEXTURE2D_WRITE__ dst)
+	{
+		DEFINE_KERNEL_ITERATORS_XY(x, y);
+		float4 col = _tex2DVecN(src, x, y, params->srcCompOrder);
+
+		col.x *= powr(2.0f, params->exposure);
+		col.y *= powr(2.0f, params->exposure);
+		col.z *= powr(2.0f, params->exposure);
+
+		_tex2DVec4Write(dst, x, y, col);
+	}
+]]
+
+function Create()
+	InExposure = self:AddInput("Exposure", "Exposure", {
+		LINKID_DataType = "Number",
+		INPID_InputControl = "SliderControl",
+		INP_MinScale = 0.0,
+		INP_MaxScale = 2.0,
+		INP_Default = 0.0,
+		})
+
+	InImage = self:AddInput("Image", "Image", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		INP_AcceptsGPUImages = true,
+		})
+
+	OutImage = self:AddOutput("Output", "Output", {
+		LINKID_DataType = "Image",
+		LINK_Main = 1,
+		})
+end
+
+function Process(req)
+	local src = InImage:GetValue(req)
+	local dst = Image{ IMG_Like = src, IMG_DeferAlloc = true }
+
+	local node = DVIPComputeNode(req, "ExposureKernel", ExposureKernel, "ExposureParams", ExposureParams)
+
+	local params = node:GetParamBlock(ExposureParams)
+
+	params.exposure = InExposure:GetValue(req).Value
+	params.srcCompOrder = src:IsMask() and 1 or 15
+
+	node:SetParamBlock(params)
+
+	node:AddInput("src", src)
+	node:AddOutput("dst", dst)
+
+	local ok = node:RunSession(req)
+
+	if not ok then
+		dst = nil
+	end
+
+	OutImage:Set(req, dst)
+end
